@@ -19,8 +19,6 @@ package main
 import (
 	"context"
 	"github.com/ahmedkhaeld/recipes-api/handlers"
-	"github.com/gin-contrib/sessions"
-	redisStore "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -69,18 +67,12 @@ func init() {
 func main() {
 	// for public  api endpoints
 	router := gin.Default()
-	store, _ := redisStore.NewStore(10, "tcp", "localhost:6379", "", []byte("secret"))
-	router.Use(sessions.Sessions("recipes_api", store))
 
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
 
-	router.POST("/signin", authHandler.SignInHandler)
-	router.POST("/refresh", authHandler.RefreshHandler)
-	router.POST("/signout", authHandler.SignOutHandler)
-
 	// for private api endpoints
 	authorized := router.Group("/")
-	authorized.Use(authHandler.AuthMiddleware()) //use Authorization header instead of api key middleware
+	authorized.Use(authHandler.AuthMiddleware())
 	{
 		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
 		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
