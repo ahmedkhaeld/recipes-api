@@ -4,17 +4,21 @@ import (
 	"context"
 	"crypto/sha256"
 	"github.com/ahmedkhaeld/recipes-api/models"
+	"github.com/auth0-community/go-auth0"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"gopkg.in/square/go-jose.v2"
 	"net/http"
 	"time"
 )
 
 const jwtSecret = "eUbP9shywUygMx7u"
+const Auth0Domain = "DOMAIN.eu.auth0.com"
+const AUTH0APIIDENTIFIER = "https://api.recipes.io"
 
 type AuthHandler struct {
 	collection *mongo.Collection
@@ -142,19 +146,20 @@ func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, jwtOutput)
 }
 
-//AuthMiddleware check for Authorization header
 func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		//update AuthMiddleware to obtain the token from the request cookie. If
-		//the cookie is not set, we return a 403 code ( Forbidden )
-		session := sessions.Default(c)
-		sessionToken := session.Get("token")
-		if sessionToken == nil {
-			c.JSON(http.StatusForbidden, gin.H{
-				"message": "Not logged",
-			})
+		var auth0Domain = "https://" + Auth0Domain + "/"
+		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: auth0Domain + ".well-known/jwks.json"}, nil)
+		configuration := auth0.NewConfiguration(client, []string{AUTH0APIIDENTIFIER}, auth0Domain, jose.RS256)
+		validator := auth0.NewValidator(configuration, nil)
+
+		_, err := validator.ValidateRequest(c.Request)
+
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
 			c.Abort()
+			return
 		}
 		c.Next()
 	}
