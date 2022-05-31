@@ -28,13 +28,15 @@ import (
 )
 
 const (
-	mongodbURI = "mongodb://admin:password@localhost:27017/recipes-store?authSource=admin"
-	DB         = "recipes-store"
-	COL        = "recipes"
+	mongodbURI        = "mongodb://admin:password@localhost:27017/recipes-store?authSource=admin"
+	DB                = "recipes-store"
+	recipesCollection = "recipes"
+	usersCollection   = "users"
 )
 
 var (
 	recipesHandler *handlers.RecipesHandler
+	authHandler    *handlers.AuthHandler
 )
 
 func init() {
@@ -45,7 +47,7 @@ func init() {
 		log.Fatal(err)
 	}
 	log.Println("Connected to MongoDB")
-	collection := client.Database(DB).Collection(COL)
+	recipesCol := client.Database(DB).Collection(recipesCollection)
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -55,7 +57,10 @@ func init() {
 
 	status := redisClient.Ping(ctx)
 	log.Println(status)
-	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
+	recipesHandler = handlers.NewRecipesHandler(ctx, recipesCol, redisClient)
+
+	usersCol := client.Database(DB).Collection(usersCollection)
+	authHandler = handlers.NewAuthHandler(ctx, usersCol)
 
 }
 
@@ -64,9 +69,12 @@ func main() {
 	router := gin.Default()
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
 
+	router.POST("/signin", authHandler.SignInHandler)
+	router.POST("/refresh", authHandler.RefreshHandler)
+
 	// for private api endpoints
 	authorized := router.Group("/")
-	authorized.Use(handlers.AuthMiddleware())
+	authorized.Use(authHandler.AuthMiddleware()) //use Authorization header instead of api key middleware
 	{
 		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
 		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
