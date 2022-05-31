@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"github.com/ahmedkhaeld/recipes-api/models"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
@@ -36,7 +38,16 @@ func NewAuthHandler(ctx context.Context, collection *mongo.Collection) *AuthHand
 	}
 }
 
-//SignInHandler sf
+// swagger:operation POST /signin auth signIn
+// Login with username and password
+// ---
+// produces:
+// - application/json
+// responses:
+//     '200':
+//         description: Successful operation
+//     '401':
+//         description: Invalid credentials
 func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 	//user entering his name and password:
 
@@ -49,8 +60,6 @@ func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 
 	h := sha256.New()
 
-	//FindOne operation on the users' collection to verify if
-	//the given credentials exist
 	cur := handler.collection.FindOne(handler.ctx, bson.M{
 		"username": user.Username,
 		"password": string(h.Sum([]byte(user.Password))),
@@ -59,31 +68,42 @@ func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
+	//The session starts once a user logs in and
+	//expires sometime after that. The session information of the logged-in user will be
+	//stored in the Redis cache
+	sessionToken := xid.New().String()
+	session := sessions.Default(c)
+	session.Set("username", user.Username)
+	session.Set("token", sessionToken)
+	session.Save()
 
-	// after user verified; issue a jwt token with an expiration time
-	// set up the claims
-	expirationTime := time.Now().Add(10 * time.Minute)
-	claims := &Claims{
-		Username: user.Username,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
-		},
-	}
-	//issue the token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(jwtSecret))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	jwtOutput := JWTOutput{
-		Token:   tokenString,
-		Expires: expirationTime,
-	}
-	c.JSON(http.StatusOK, jwtOutput)
+	c.JSON(http.StatusOK, gin.H{"error": "User signed in"})
 }
 
+// swagger:operation POST /signout auth signOut
+// Signing out
+// ---
+// responses:
+//     '200':
+//         description: Successful operation
+//SignOutHandler handler to clear the session cookie
+func (handler *AuthHandler) SignOutHandler(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Clear()
+	session.Save()
+	c.JSON(http.StatusOK, gin.H{"message": "Signed out..."})
+}
+
+// swagger:operation POST /refresh auth refresh
+// Refresh token
+// ---
+// produces:
+// - application/json
+// responses:
+//     '200':
+//         description: Successful operation
+//     '401':
+//         description: Invalid credentials
 //RefreshHandler renewing a jwt, increase the expiration time to make a jwt token last;
 //it takes the previous token and returns a new token with a renewed expiry time
 func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
@@ -124,22 +144,17 @@ func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 
 //AuthMiddleware check for Authorization header
 func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// extract the stored token from the header
-		tokenValue := c.GetHeader("Authorization")
-		claims := &Claims{}
 
-		//generates a signature using the header and payload
-		//from the Authorization header and the secret key.
-		tkn, err := jwt.ParseWithClaims(tokenValue, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(jwtSecret), nil
-		})
-		if err != nil {
-			c.AbortWithStatus(http.StatusUnauthorized)
-		}
-		//verifies if the signature matches the one on the JWT
-		if !tkn.Valid {
-			c.AbortWithStatus(http.StatusUnauthorized)
+	return func(c *gin.Context) {
+		//update AuthMiddleware to obtain the token from the request cookie. If
+		//the cookie is not set, we return a 403 code ( Forbidden )
+		session := sessions.Default(c)
+		sessionToken := session.Get("token")
+		if sessionToken == nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "Not logged",
+			})
+			c.Abort()
 		}
 		c.Next()
 	}
