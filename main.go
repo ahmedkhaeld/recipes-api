@@ -1,18 +1,23 @@
 // Recipes API
 //
 // This is a sample recipes API.
-//Distributed-Applications-in-Gin.
 //
-// Schemes: http
-//Host: localhost:8080
-//BasePath: /
-//Version: 1.0.0
+//	Schemes: http
+//  Host: api.recipes.io:8080
+//	BasePath: /
+//	Version: 1.0.0
+//	Contact: Ahmed Khaled <ahmedkhaledmohamed9@gmail.com>
+//  SecurityDefinitions:
+//  api_key:
+//    type: apiKey
+//    name: Authorization
+//    in: header
 //
-// Consumes:
-// - application/json
+//	Consumes:
+//	- application/json
 //
-// Produces:
-// - application/json
+//	Produces:
+//	- application/json
 // swagger:meta
 package main
 

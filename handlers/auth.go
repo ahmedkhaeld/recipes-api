@@ -4,21 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"github.com/ahmedkhaeld/recipes-api/models"
-	"github.com/auth0-community/go-auth0"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gopkg.in/square/go-jose.v2"
 	"net/http"
 	"time"
 )
 
 const jwtSecret = "eUbP9shywUygMx7u"
-const Auth0Domain = "DOMAIN.eu.auth0.com"
-const AUTH0APIIDENTIFIER = "https://api.recipes.io"
 
 type AuthHandler struct {
 	collection *mongo.Collection
@@ -90,7 +86,6 @@ func (handler *AuthHandler) SignInHandler(c *gin.Context) {
 // responses:
 //     '200':
 //         description: Successful operation
-//SignOutHandler handler to clear the session cookie
 func (handler *AuthHandler) SignOutHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
@@ -108,8 +103,6 @@ func (handler *AuthHandler) SignOutHandler(c *gin.Context) {
 //         description: Successful operation
 //     '401':
 //         description: Invalid credentials
-//RefreshHandler renewing a jwt, increase the expiration time to make a jwt token last;
-//it takes the previous token and returns a new token with a renewed expiry time
 func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 	tokenValue := c.GetHeader("Authorization")
 	claims := &Claims{}
@@ -149,18 +142,15 @@ func (handler *AuthHandler) RefreshHandler(c *gin.Context) {
 func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		var auth0Domain = "https://" + Auth0Domain + "/"
-		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: auth0Domain + ".well-known/jwks.json"}, nil)
-		configuration := auth0.NewConfiguration(client, []string{AUTH0APIIDENTIFIER}, auth0Domain, jose.RS256)
-		validator := auth0.NewValidator(configuration, nil)
-
-		_, err := validator.ValidateRequest(c.Request)
-
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+		session := sessions.Default(c)
+		sessionToken := session.Get("token")
+		if sessionToken == nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "Not logged",
+			})
 			c.Abort()
-			return
 		}
 		c.Next()
+
 	}
 }
