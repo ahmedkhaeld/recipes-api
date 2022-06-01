@@ -9,9 +9,6 @@ import (
 	"net/http"
 )
 
-const Auth0Domain = "DOMAIN.eu.auth0.com"
-const AUTH0APIIDENTIFIER = "https://api.recipes.io"
-
 type AuthHandler struct {
 	collection *mongo.Collection
 	ctx        context.Context
@@ -24,12 +21,12 @@ func NewAuthHandler(ctx context.Context, collection *mongo.Collection) *AuthHand
 	}
 }
 
-func (handler *AuthHandler) AuthMiddleware() gin.HandlerFunc {
+func (handler *AuthHandler) AuthMiddleware(domain, id string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
-		var auth0Domain = "https://" + Auth0Domain + "/"
+		var auth0Domain = "https://" + domain + "/"
 		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: auth0Domain + ".well-known/jwks.json"}, nil)
-		configuration := auth0.NewConfiguration(client, []string{AUTH0APIIDENTIFIER}, auth0Domain, jose.RS256)
+		configuration := auth0.NewConfiguration(client, []string{id}, auth0Domain, jose.RS256)
 		validator := auth0.NewValidator(configuration, nil)
 
 		_, err := validator.ValidateRequest(c.Request)
