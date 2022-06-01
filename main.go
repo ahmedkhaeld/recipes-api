@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/ahmedkhaeld/recipes-api/handlers"
 	"github.com/ahmedkhaeld/recipes-api/utils"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -67,7 +68,21 @@ func init() {
 func main() {
 	// for public  api endpoints
 	router := gin.Default()
+	router.Use(cors.Default())
 
+	/*
+		restrict the requests to trusted origins
+		Define the origins and allow incoming HTTP
+		methods with the following code
+	*/
+	//router.Use(cors.New(cors.Config{
+	//	AllowOrigins:     []string{"http://localhost:3000"},
+	//	AllowMethods:     []string{"GET", "OPTIONS"},
+	//	AllowHeaders:     []string{"Origin"},
+	//	ExposeHeaders:    []string{"Content-Length"},
+	//	AllowCredentials: true,
+	//	MaxAge:           12 * time.Hour,
+	//}))
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
 
 	// for private api endpoints
