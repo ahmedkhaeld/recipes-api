@@ -19,14 +19,13 @@ package main
 import (
 	"context"
 	"github.com/ahmedkhaeld/recipes-api/handlers"
-	"github.com/ahmedkhaeld/recipes-api/utils"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"log"
+	"os"
 )
 
 var (
@@ -34,66 +33,33 @@ var (
 	authHandler    *handlers.AuthHandler
 )
 
-var Cfg, err = utils.LoadConfig(".")
-
 func init() {
 
-	if err != nil {
-		log.Fatal("cannot load configuration variables", err)
-	}
-
 	ctx := context.Background()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(Cfg.MongoURI))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGO_URI")))
 	if err = client.Ping(context.TODO(), readpref.Primary()); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Connected to MongoDB")
-	recipesCol := client.Database(Cfg.DB).Collection(Cfg.RecipesCol)
+	collection := client.Database(os.Getenv("MONGO_DATABASE")).Collection("recipes")
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     Cfg.RedisAddr,
+		Addr:     os.Getenv("REDIS_URI"),
 		Password: "",
 		DB:       0,
 	})
 
 	status := redisClient.Ping(ctx)
 	log.Println(status)
-	recipesHandler = handlers.NewRecipesHandler(ctx, recipesCol, redisClient)
-
-	usersCol := client.Database(Cfg.DB).Collection(Cfg.UsersCol)
-	authHandler = handlers.NewAuthHandler(ctx, usersCol)
+	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
 
 }
-
 func main() {
-	// for public  api endpoints
 	router := gin.Default()
-	router.Use(cors.Default())
-
-	/*
-		restrict the requests to trusted origins
-		Define the origins and allow incoming HTTP
-		methods with the following code
-	*/
-	//router.Use(cors.New(cors.Config{
-	//	AllowOrigins:     []string{"http://localhost:3000"},
-	//	AllowMethods:     []string{"GET", "OPTIONS"},
-	//	AllowHeaders:     []string{"Origin"},
-	//	ExposeHeaders:    []string{"Content-Length"},
-	//	AllowCredentials: true,
-	//	MaxAge:           12 * time.Hour,
-	//}))
+	router.POST("/recipes", recipesHandler.NewRecipeHandler)
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
-
-	// for private api endpoints
-	authorized := router.Group("/")
-	authorized.Use(authHandler.AuthMiddleware(Cfg.Auth0Domain, Cfg.Auth0APIIdentifier))
-	{
-		authorized.POST("/recipes", recipesHandler.NewRecipeHandler)
-		authorized.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
-		authorized.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
-		authorized.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
-	}
-
+	router.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
+	router.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
+	router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
 	router.Run()
 }
