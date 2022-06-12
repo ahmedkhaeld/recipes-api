@@ -1,24 +1,7 @@
-// Recipes API
-//
-// This is a sample recipes API.
-//Distributed-Applications-in-Gin.
-//
-// Schemes: http
-//Host: localhost:8080
-//BasePath: /
-//Version: 1.0.0
-//
-// Consumes:
-// - application/json
-//
-// Produces:
-// - application/json
-// swagger:meta
-package main
+package handlers
 
 import (
 	"context"
-	"github.com/ahmedkhaeld/recipes-api/handlers"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -29,9 +12,12 @@ import (
 )
 
 var (
-	recipesHandler *handlers.RecipesHandler
-	authHandler    *handlers.AuthHandler
+	recipesHandler *RecipesHandler
 )
+
+type Msg struct {
+	Message string
+}
 
 func init() {
 
@@ -51,21 +37,19 @@ func init() {
 
 	status := redisClient.Ping(ctx)
 	log.Println(status)
-	recipesHandler = handlers.NewRecipesHandler(ctx, collection, redisClient)
+	recipesHandler = NewRecipesHandler(ctx, collection, redisClient)
 
 }
-func main() {
-	SetupServer().Run()
-}
 
-func SetupServer() *gin.Engine {
+func SetupRouter() *gin.Engine {
 
 	router := gin.Default()
+
 	router.POST("/recipes", recipesHandler.NewRecipeHandler)
 	router.GET("/recipes", recipesHandler.ListRecipesHandler)
 	router.PUT("/recipes/:id", recipesHandler.UpdateRecipeHandler)
 	router.DELETE("/recipes/:id", recipesHandler.DeleteRecipeHandler)
 	router.GET("/recipes/:id", recipesHandler.GetOneRecipeHandler)
-
+	router.Run()
 	return router
 }
